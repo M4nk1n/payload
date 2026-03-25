@@ -6,6 +6,10 @@
  * and re-run `payload generate:types` to regenerate this file.
  */
 
+import { Categories } from './collections/Categories'
+import { Documents } from './collections/Documents'
+import { Products } from './collections/Products'
+
 /**
  * Supported timezones in IANA format.
  *
@@ -69,6 +73,9 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
+    categories: typeof Categories,   // ← 新增
+    products: typeof Products,     // ← 新增
+    documents: typeof Documents,    // ← 新增
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
