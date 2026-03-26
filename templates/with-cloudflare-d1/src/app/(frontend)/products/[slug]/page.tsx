@@ -6,8 +6,9 @@ import {
   getProductBySlug, getDocumentsForProduct, getRelatedProducts,
   mediaUrl, type ProductDoc, type CategoryDoc, type MediaDoc, type DocumentDoc,
 } from '../../_lib/api'
-import { statusLabel, docTypeLabel, docTypeIcon, formatDate, formatBytes } from '../../_lib/utils'
+import { docTypeLabel, docTypeIcon, formatDate, formatBytes } from '../../_lib/utils'
 import { GalleryClient } from './GalleryClient'
+import { ProductGrid } from '../../_components/ProductGrid'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -28,20 +29,37 @@ export default async function ProductDetailPage({ params }: PageProps) {
   const product = await getProductBySlug(slug)
   if (!product) notFound()
 
-  const category = typeof product.category === 'object' && product.category
-    ? (product.category as CategoryDoc) : null
+  const category =
+    typeof product.category === 'object' && product.category
+      ? (product.category as CategoryDoc)
+      : null
 
   const [documents, related] = await Promise.all([
     getDocumentsForProduct(product.id),
     getRelatedProducts({ categoryId: category?.id, excludeSlug: slug }),
   ])
 
-  // Build image list: cover + gallery
+  // Build image list and resolve all URLs in parallel
   const coverImg = typeof product.coverImage === 'object' ? (product.coverImage as MediaDoc) : null
   const galleryImgs = (product.gallery ?? [])
     .map((g) => (typeof g.image === 'object' ? (g.image as MediaDoc) : null))
     .filter((img): img is MediaDoc => img !== null)
-  const allImages = [coverImg, ...galleryImgs].filter((img): img is MediaDoc => img !== null && !!img.url)
+  const allImageDocs = [coverImg, ...galleryImgs].filter((img): img is MediaDoc => img !== null && !!img.url)
+
+  const allImageUrls = await Promise.all(allImageDocs.map((img) => mediaUrl(img)))
+  const galleryImages = allImageDocs.map((img, i) => ({
+    url: allImageUrls[i],
+    alt: img.alt ?? img.filename ?? '',
+    width: img.width ?? 800,
+    height: img.height ?? 600,
+  })).filter((img) => !!img.url)
+
+  // Resolve document file URLs
+  const docFileUrls = await Promise.all(
+    (documents as DocumentDoc[]).map((doc) =>
+      mediaUrl(typeof doc.file === 'object' ? (doc.file as MediaDoc) : null)
+    )
+  )
 
   return (
     <>
@@ -56,7 +74,12 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <Link href="/">首页</Link>
                 <span>/</span>
                 <Link href="/products">产品中心</Link>
-                {category && (<><span>/</span><Link href={`/products?category=${category.slug}`}>{category.name}</Link></>)}
+                {category && (
+                  <>
+                    <span>/</span>
+                    <Link href={`/products?category=${category.slug}`}>{category.name}</Link>
+                  </>
+                )}
                 <span>/</span>
                 <span style={{ color: 'var(--ink2)' }}>{product.name}</span>
               </div>
@@ -66,7 +89,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
               {product.model && <div className="product-hero-model">型号 · {product.model}</div>}
               {product.summary && <p className="product-hero-summary">{product.summary}</p>}
 
-              {/* Certifications + Applications tags */}
+              {/* Certifications + Applications */}
               {((product.certifications?.length ?? 0) > 0 || (product.applications?.length ?? 0) > 0) && (
                 <div className="product-hero-tags">
                   {(product.certifications ?? []).map((c, i) => (
@@ -87,7 +110,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                         {spec.value}
                         {spec.unit && <span style={{ fontSize: 11, color: 'var(--ink3)', marginLeft: 4 }}>{spec.unit}</span>}
                       </div>
-                      <div style={{ fontFamily: 'var(--ff-mono)', fontSize: 10, color: 'var(--ink3)', letterSpacing: 1, textTransform: 'uppercase' as const, marginTop: 2 }}>
+                      <div style={{ fontFamily: 'var(--ff-mono)', fontSize: 10, color: 'var(--ink3)', letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>
                         {spec.key}
                       </div>
                     </div>
@@ -96,17 +119,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
               )}
             </div>
 
-            {/* Right: gallery */}
-            {allImages.length > 0 && (
-              <GalleryClient
-                images={allImages.map((img) => ({
-                  url: mediaUrl(img),
-                  alt: img.alt ?? img.filename ?? '',
-                  width: img.width ?? 800,
-                  height: img.height ?? 600,
-                }))}
-              />
-            )}
+            {/* Right: gallery (Client Component for interactivity) */}
+            {galleryImages.length > 0 && <GalleryClient images={galleryImages} />}
           </div>
         </div>
       </div>
@@ -148,12 +162,18 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <h2 className="section-title" style={{ fontSize: 32 }}>DOCUMENTS</h2>
               </div>
               <div className="doc-list" style={{ marginBottom: 64 }}>
-                {(documents as DocumentDoc[]).map((doc) => {
+                {(documents as DocumentDoc[]).map((doc, i) => {
+                  const fileUrl = docFileUrls[i]
                   const file = typeof doc.file === 'object' ? (doc.file as MediaDoc) : null
-                  const fileUrl = mediaUrl(file)
                   return (
-                    <a key={doc.id} href={fileUrl || '#'} target="_blank" rel="noreferrer"
-                      className="doc-item" download>
+                    <a
+                      key={doc.id}
+                      href={fileUrl || '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="doc-item"
+                      download
+                    >
                       <div className="doc-icon">{docTypeIcon(doc.type)}</div>
                       <div className="doc-info">
                         <div className="doc-title">{doc.title}</div>
@@ -181,34 +201,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <p className="section-eyebrow">相关产品</p>
                 <h2 className="section-title" style={{ fontSize: 32 }}>RELATED</h2>
               </div>
-              <div className="product-grid">
-                {related.map((rel: ProductDoc) => {
-                  const relCover = mediaUrl(rel.coverImage)
-                  return (
-                    <Link key={rel.id} href={`/products/${rel.slug}`} className="product-card">
-                      <div className="product-card-img">
-                        {relCover ? (
-                          <Image src={relCover} alt={rel.name} fill sizes="300px" style={{ objectFit: 'cover' }} />
-                        ) : (
-                          <div className="product-card-img-placeholder">
-                            <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
-                              <rect x="8" y="8" width="32" height="32" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div className="product-card-body">
-                        <h3 className="product-card-name">{rel.name}</h3>
-                        {rel.model && <span className="product-card-model">MODEL: {rel.model}</span>}
-                      </div>
-                      <div className="product-card-footer">
-                        <span>{rel.specs?.length ?? 0} 项参数</span>
-                        <span className="product-card-arrow">→</span>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
+              <ProductGrid products={related as ProductDoc[]} />
             </>
           )}
         </div>
