@@ -6,10 +6,6 @@
  * and re-run `payload generate:types` to regenerate this file.
  */
 
-import { Categories } from './collections/Categories'
-import { Documents } from './collections/Documents'
-import { Products } from './collections/Products'
-
 /**
  * Supported timezones in IANA format.
  *
@@ -73,9 +69,9 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
-    categories: typeof Categories,   // ← 新增
-    products: typeof Products,     // ← 新增
-    documents: typeof Documents,    // ← 新增
+    categories: Category;
+    products: Product;
+    documents: Document;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -85,6 +81,9 @@ export interface Config {
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    categories: CategoriesSelect<false> | CategoriesSelect<true>;
+    products: ProductsSelect<false> | ProductsSelect<true>;
+    documents: DocumentsSelect<false> | DocumentsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -168,6 +167,115 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  name: string;
+  /**
+   * 用于 URL，仅限小写字母、数字和连字符，如 industrial-robots
+   */
+  slug: string;
+  description?: string | null;
+  icon?: (number | null) | Media;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products".
+ */
+export interface Product {
+  id: number;
+  name: string;
+  /**
+   * 如：XR-2000A
+   */
+  model?: string | null;
+  slug: string;
+  status?: ('active' | 'discontinued' | 'coming_soon') | null;
+  category?: (number | null) | Category;
+  /**
+   * 建议 60–120 字，显示在产品卡片上
+   */
+  summary?: string | null;
+  description?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  coverImage: number | Media;
+  gallery?:
+    | {
+        image: number | Media;
+        caption?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * 键值对形式，如「额定功率：7.5 kW」
+   */
+  specs?:
+    | {
+        key: string;
+        value: string;
+        unit?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  applications?:
+    | {
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  certifications?:
+    | {
+        /**
+         * 如：CE、ISO 9001、GB/T 12345
+         */
+        name: string;
+        id?: string | null;
+      }[]
+    | null;
+  seo?: {
+    title?: string | null;
+    description?: string | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "documents".
+ */
+export interface Document {
+  id: number;
+  title: string;
+  type: 'manual' | 'datasheet' | 'installation' | 'maintenance' | 'certificate' | 'other';
+  product?: (number | null) | Product;
+  file: number | Media;
+  language?: ('zh' | 'en' | 'bilingual') | null;
+  /**
+   * 如：v2.1、Rev.C
+   */
+  version?: string | null;
+  description?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -197,6 +305,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'categories';
+        value: number | Category;
+      } | null)
+    | ({
+        relationTo: 'products';
+        value: number | Product;
+      } | null)
+    | ({
+        relationTo: 'documents';
+        value: number | Document;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -277,6 +397,82 @@ export interface MediaSelect<T extends boolean = true> {
   filesize?: T;
   width?: T;
   height?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories_select".
+ */
+export interface CategoriesSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  description?: T;
+  icon?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products_select".
+ */
+export interface ProductsSelect<T extends boolean = true> {
+  name?: T;
+  model?: T;
+  slug?: T;
+  status?: T;
+  category?: T;
+  summary?: T;
+  description?: T;
+  coverImage?: T;
+  gallery?:
+    | T
+    | {
+        image?: T;
+        caption?: T;
+        id?: T;
+      };
+  specs?:
+    | T
+    | {
+        key?: T;
+        value?: T;
+        unit?: T;
+        id?: T;
+      };
+  applications?:
+    | T
+    | {
+        label?: T;
+        id?: T;
+      };
+  certifications?:
+    | T
+    | {
+        name?: T;
+        id?: T;
+      };
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "documents_select".
+ */
+export interface DocumentsSelect<T extends boolean = true> {
+  title?: T;
+  type?: T;
+  product?: T;
+  file?: T;
+  language?: T;
+  version?: T;
+  description?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
